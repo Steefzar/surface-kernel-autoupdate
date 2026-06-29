@@ -1,0 +1,134 @@
+# Surface kernel auto-update (CachyOS)
+
+Installs the **`linux-cachyos-surface`** kernel from
+[dylandhall/linux-cachyos-surface](https://github.com/dylandhall/linux-cachyos-surface)
+(a CachyOS kernel with the linux-surface patches for Microsoft Surface hardware)
+and keeps it updated **as part of your normal `yay` run** — building + installing a
+new version only when one is actually published, with full build output, like an
+AUR `-git` package.
+
+That repo is **not in the AUR**, so plain `yay -Syu` can't track it. This sets up a
+tiny **local pacman repo** (`[surface-local]`): a small updater builds new versions
+into it and `repo-add`s them; pacman/yay then install them like any repo package. A
+fish wrapper runs the updater automatically whenever you do a full upgrade.
+
+## Requirements
+
+- CachyOS (or another Arch derivative) on a Surface device.
+- `base-devel`, `git`, and **`yay`** (for the auto-update-on-upgrade wrapper).
+- A bootloader setup that auto-creates entries on kernel install — CachyOS's
+  Limine / systemd-boot / GRUB hooks all do this out of the box.
+- ~15–20 min and a few GB free for the first compile (thin LTO, multi-threaded).
+
+## Install
+
+```bash
+tar xzf surface-kernel-autoupdate.tar.gz
+cd surface-kernel-autoupdate
+./install.sh
+```
+
+`install.sh` is idempotent. It will:
+
+1. install `surface-kernel-update` → `~/.local/bin/`
+2. install the fish wrapper → `~/.config/fish/functions/yay.fish`
+3. create the local repo `/var/lib/surface-local` and register `[surface-local]`
+   in `/etc/pacman.conf` (`SigLevel = Optional TrustAll`)
+4. `sudo pacman -Sy`
+5. optionally build + install the kernel right away (it asks).
+
+You'll be prompted for `sudo` (repo dir, pacman.conf, db sync, install) and, on the
+first build, `makepkg` installs the `rust rust-bindgen rust-src` build deps.
+
+If you skipped the build during install, do it when ready:
+
+```bash
+surface-kernel-update                                       # build (long compile)
+sudo pacman -S linux-cachyos-surface linux-cachyos-surface-headers
+# reboot, choose the Surface entry, then:
+uname -r                                                    # -> ...-cachyos-surface
+```
+
+## How updates work
+
+Run **`yay`** (or `yay -Syu`) as usual. The fish wrapper first runs
+`surface-kernel-update`, which:
+
+- syncs dylandhall's repo,
+- compares the published version against what's already built,
+- **only if newer**, builds it and adds it to `[surface-local]`,
+
+then your normal `yay` upgrade installs it in the same transaction. When nothing is
+new you just get a one-line `... already built` and it moves on — no rebuild.
+
+> Using `sudo pacman -Syu` instead of `yay` will still *install* an
+> already-built newer Surface kernel, but won't *build* one. Use `yay`, or run
+> `surface-kernel-update` manually, to pick up brand-new releases.
+
+### Not using fish?
+Skip `yay.fish` and add an alias/function to your shell rc, e.g. bash:
+
+```bash
+yay() { surface-kernel-update; command yay "$@"; }
+```
+
+…or just run `surface-kernel-update` yourself before upgrading.
+
+## Tuning
+
+- **LTO:** defaults to `thin` (fast, low RAM). For maximum-perf full LTO:
+  `SURFACE_LTO=full surface-kernel-update`.
+- **Repo / build paths:** override `SURFACE_REPODIR` (local repo) or `SURFACE_REPO`
+  (git build dir) in the environment.
+
+## Notes & caveats
+
+- **The repo lives in `/var/lib/surface-local`, not your home**, on purpose:
+  modern pacman downloads (even `file://`) as the unprivileged `alpm` user, which
+  can't traverse a `700` home directory. A home-dir repo fails with
+  "Could not open file".
+- **The `-lts` variant is intentionally disabled.** Upstream pins it to a 6.12
+  point release the cachyos/linux-surface patches don't apply to — forcing it
+  produces a kernel that won't compile. If upstream realigns it, re-enable by
+  uncommenting the `VARIANTS=(...)` line in `surface-kernel-update`. A regular
+  `linux-cachyos-lts` makes a fine non-surface fallback in the meantime.
+- **Keep a fallback kernel** (e.g. `linux-cachyos` or `linux-cachyos-lts`) so a bad
+  build never leaves you unbootable.
+- Old package files accumulate in `/var/lib/surface-local` on version bumps; prune
+  occasionally if you care about the disk.
+
+## Uninstall
+
+```bash
+./uninstall.sh
+```
+
+Removes the updater, the fish wrapper, the `[surface-local]` repo and its
+`pacman.conf` entry. It leaves installed kernels in place (so you stay bootable) and
+prints the commands to remove those + the build cache if you want.
+
+## Files in this package
+
+| file | purpose |
+|------|---------|
+| `install.sh` | automated setup (this is what you run) |
+| `surface-kernel-update` | the version-gated builder → local repo |
+| `yay.fish` | fish wrapper that runs the updater on `yay -Syu` |
+| `uninstall.sh` | undo the setup |
+| `README.md` | this file |
+| `NOTICE` | authorship / attribution |
+
+## Authorship & credits
+
+The bulk of this project was generated by **Claude (Anthropic's Claude Code, model
+Opus 4.8)** at my direction. I configured, tested, and maintain it, but I don't
+claim to have hand-written the scripts. Commits are co-authored accordingly
+(`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`), and see `NOTICE`.
+
+This repo is just the **installer/automation** — it bundles no kernel source. All
+credit for the kernel goes to:
+
+- [dylandhall/linux-cachyos-surface](https://github.com/dylandhall/linux-cachyos-surface) — the Surface-patched CachyOS kernel (built here)
+- [jonpetersathan/linux-cachyos-surface](https://github.com/jonpetersathan/linux-cachyos-surface) — the upstream project dylandhall forked
+- [linux-surface/linux-surface](https://github.com/linux-surface/linux-surface) — Microsoft Surface kernel patches
+- [CachyOS/linux-cachyos](https://github.com/CachyOS/linux-cachyos) — the CachyOS kernel + patches

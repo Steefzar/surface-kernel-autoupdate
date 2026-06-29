@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Build dylandhall's linux-cachyos-surface kernels into a local pacman repo,
+# but only when upstream publishes a newer version. Installation itself is left
+# to pacman/yay, which see the packages via the [surface-local] repo.
+set -euo pipefail
+
+REPO="${SURFACE_REPO:-$HOME/.local/share/linux-cachyos-surface}"   # git build dir
+REPODIR="${SURFACE_REPODIR:-/var/lib/surface-local}"              # local pacman repo
+# ^ must live OUTSIDE $HOME: pacman's sandboxed download user 'alpm' can't traverse
+#   a 700 home dir, so a file:// repo there fails. Dir is owned by you (repo-add
+#   needs no sudo) but on a path/perms the alpm user can read.
+DBNAME="surface-local"
+
+# LTO mode for the llvm-built mainline variant. "thin" is multithreaded and uses
+# far less RAM than "full" (which can need >10 GiB just to link) — safer for most
+# machines and for repeated auto-builds, with negligible real-world perf difference.
+# Force full LTO with:  SURFACE_LTO=full surface-kernel-update
+export _use_llvm_lto="${_use_llvm_lto:-${SURFACE_LTO:-thin}}"
+URL="https://github.com/dylandhall/linux-cachyos-surface.git"
+# linux-cachyos-surface-lts is disabled: as of this writing the repo pins it to a
+# kernel point release the cachyos/linux-surface 6.12 patches don't apply to (the
+# hid-multitouch #define hunks reject; forcing them yields a kernel that won't even
+# compile). It's an upstream version-pin bug. Re-enable here once upstream realigns
+# the LTS version with its patch sources:
+#   VARIANTS=(linux-cachyos-surface linux-cachyos-surface-lts)
+VARIANTS=(linux-cachyos-surface)
+
+mkdir -p "$REPODIR"
+
+# ensure at least an empty db exists so pacman -Sy / -S won't error on a fresh repo
+if [[ ! -e "$REPODIR/${DBNAME}.db" ]]; then
+    tar -czf "$REPODIR/${DBNAME}.db.tar.gz" -T /dev/null
+    ln -sf "${DBNAME}.db.tar.gz" "$REPODIR/${DBNAME}.db"
+fi
+
+# pacman won't run ANY -S transaction (incl. installing build deps) while a
+# configured repo has no synced db. Make sure surface-local's sync db exists.
+if grep -q '^\[surface-local\]' /etc/pacman.conf 2>/dev/null \
+   && [[ ! -e /var/lib/pacman/sync/surface-local.db ]]; then
+    echo ":: surface-local sync db missing — running 'sudo pacman -Sy' once..."
+    sudo pacman -Sy
+fi
+
+# clone on first run, otherwise sync to upstream main
+if [[ ! -d $REPO/.git ]]; then
+    echo ":: Cloning $URL"
+    git clone "$URL" "$REPO"
+fi
+git -C "$REPO" fetch --quiet origin
+git -C "$REPO" reset --hard --quiet origin/main
+
+built_any=0
+failed=()
+for v in "${VARIANTS[@]}"; do
+    dir="$REPO/$v"
+    [[ -d $dir ]] || { echo ":: skip $v (not in repo)"; continue; }
+
+    # target version published upstream (offline; pkgver is static)
+    newver=$(cd "$dir" && makepkg --printsrcinfo \
+        | awk '/^\tpkgver =/{pv=$3} /^\tpkgrel =/{pr=$3} END{print pv"-"pr}')
+
+    # already built for this exact version? then nothing to do.
+    # NB: test compgen's OUTPUT, not its exit status — `compgen -G` returns 0 even
+    # with no match in some shells, which would wrongly skip building a new release.
+    if [[ -n $(compgen -G "$REPODIR/${v}-${newver}-*.pkg.tar.zst") ]]; then
+        echo ":: $v $newver already built (in $DBNAME)"
+        continue
+    fi
+
+    echo ":: Building $v -> $newver"
+    git -C "$REPO" clean -ffdx --quiet -- "$v"          # pristine tree
+    # 'yes ""' feeds ENTER to every kernel oldconfig prompt so unattended,
+    # yay-triggered rebuilds accept defaults instead of hanging. pipefail is
+    # disabled inside the group so 'yes' getting SIGPIPE isn't seen as a failure.
+    if ! ( cd "$dir" && { set +o pipefail; yes '' | makepkg -sf --skipinteg --noconfirm; } ); then
+        echo ":: !! BUILD FAILED for $v — leaving local repo unchanged, continuing"
+        failed+=("$v")
+        continue
+    fi
+
+    # publish all produced packages (kernel + headers) into the local repo
+    shopt -s nullglob
+    pkgs=("$dir"/*.pkg.tar.zst)
+    shopt -u nullglob
+    cp -f "${pkgs[@]}" "$REPODIR"/
+    ( cd "$REPODIR" && repo-add -q "${DBNAME}.db.tar.gz" "${pkgs[@]##*/}" )
+    built_any=1
+done
+
+if [[ $built_any -eq 1 ]]; then
+    echo ":: New Surface kernel(s) added to local repo '$DBNAME'."
+    echo ":: Your pacman/yay upgrade will now pick them up."
+fi
+if ((${#failed[@]})); then
+    echo ":: NOTE: build failed for: ${failed[*]}"
+fi
