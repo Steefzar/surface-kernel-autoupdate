@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Set up an auto-updating dylandhall/linux-cachyos-surface kernel on a CachyOS
-# (or Arch-derivative) Surface device. Idempotent — safe to re-run.
+# Set up auto-updating linux-cachyos-surface / linux-cachyos-surface-latest
+# kernels on a CachyOS (or Arch-derivative) Surface device. Idempotent — safe
+# to re-run.
 #
 # What it does:
 #   - installs the updater   -> ~/.local/bin/surface-kernel-update
@@ -67,27 +68,36 @@ say "Plumbing installed."
 echo
 
 # ---------- optional first build ----------
+# Two packages are available (see README): linux-cachyos-surface (tracks
+# whatever kernel version linux-surface has official patches for) and
+# linux-cachyos-surface-latest (tracks the newest CachyOS kernel, falling
+# back to a hand-rebased patch set when linux-surface hasn't caught up yet).
+# They can be installed side by side. surface-kernel-update always builds
+# both into the local repo; which one(s) you actually install is up to you.
 ans=n
-read -r -p "Build & install linux-cachyos-surface now? (long compile; installs rust build deps) [y/N] " ans || ans=n
+read -r -p "Build now? (long compile; installs rust build deps) [y/N] " ans || ans=n
 case "${ans,,}" in
     y|yes)
         "$BIN/surface-kernel-update"
-        say "Installing kernel from the local repo (sudo)"
+        say "Installing linux-cachyos-surface from the local repo (sudo)"
         sudo pacman -Sy
         sudo pacman -S --needed linux-cachyos-surface linux-cachyos-surface-headers
         echo
         say "Done. Reboot, pick the Surface entry in your boot menu, then check: uname -r"
+        say "(linux-cachyos-surface-latest was also built and is available: sudo pacman -S linux-cachyos-surface-latest linux-cachyos-surface-latest-headers)"
         ;;
     *)
         cat <<EOF
 
 Next steps when you're ready:
-  surface-kernel-update                                          # build the kernel (long compile)
+  surface-kernel-update   # builds both packages (long compile)
   sudo pacman -S linux-cachyos-surface linux-cachyos-surface-headers
+  # or: sudo pacman -S linux-cachyos-surface-latest linux-cachyos-surface-latest-headers
   # reboot, pick the Surface entry, verify:  uname -r   (should contain 'cachyos-surface')
 
-After that, just run 'yay' (or 'yay -Syu') normally — it rebuilds + upgrades the
-Surface kernel only when dylandhall publishes a new version.
+After that, just run 'yay' (or 'yay -Syu') normally — it rebuilds + upgrades
+whichever Surface kernel(s) you have installed only when a new version needs
+building.
 EOF
         ;;
 esac

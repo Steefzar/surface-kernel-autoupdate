@@ -27,9 +27,10 @@ cat <<EOF
 
 Left in place (intentionally):
   - installed kernel packages (so you keep a bootable kernel)
-  - the build cache at ~/.local/share/linux-cachyos-surface
+  - the build caches at ~/.local/share/linux-cachyos-surface{,-latest}
 
 To also remove those:
-  sudo pacman -R linux-cachyos-surface linux-cachyos-surface-headers   # only if you have another kernel!
-  rm -rf ~/.local/share/linux-cachyos-surface
+  sudo pacman -R linux-cachyos-surface linux-cachyos-surface-headers \\
+                 linux-cachyos-surface-latest linux-cachyos-surface-latest-headers   # only if you have another kernel!
+  rm -rf ~/.local/share/linux-cachyos-surface ~/.local/share/linux-cachyos-surface-latest
 EOF
