@@ -1,10 +1,7 @@
 # Surface kernel auto-update (CachyOS)
 
 Installs and keeps updated **two** CachyOS kernels with Microsoft Surface
-hardware support, both forked directly from
-[linux-surface/linux-surface](https://github.com/linux-surface/linux-surface)
-(the only external upstream either depends on for patches) with our own
-CachyOS packaging on top — **as part of your normal `yay` run**, building +
+hardware support — **as part of your normal `yay` run**, building +
 installing a new version only when one is actually needed, with full build
 output, like an AUR `-git` package:
 
@@ -13,11 +10,10 @@ output, like an AUR `-git` package:
   patches for.
 - **[linux-cachyos-surface-latest](https://github.com/Steefzar/linux-cachyos-surface-latest)**
   — tracks the *newest* CachyOS kernel release. When linux-surface's official
-  patches already cover it, builds identically to the package above. When
-  there's a version gap, it falls back to a hand-rebased patch set (see that
-  repo's `surface-patches/STATUS`) applied with best-effort fuzz tolerance —
-  if that stops applying cleanly, the build aborts loudly instead of shipping
-  something broken, and needs a fresh manual/Claude-assisted rebase.
+  patches already cover it, builds identically to the package above; when
+  there's a version gap, it falls back to a hand-rebased patch set bundled in
+  that repo. If that stops applying cleanly, the build aborts loudly instead
+  of shipping something broken.
 
 They can be installed side by side, like `linux-cachyos`/`linux-cachyos-lts`.
 
@@ -65,8 +61,8 @@ build options, use the full setup below instead.
 - `base-devel`, `git`, and **`yay`** (for the auto-update-on-upgrade wrapper).
 - A bootloader setup that auto-creates entries on kernel install — CachyOS's
   Limine / systemd-boot / GRUB hooks all do this out of the box.
-- ~15–20 min and a few GB free per kernel for the first compile (thin LTO,
-  multi-threaded).
+- A long first compile per kernel — from ~20 min to a couple of hours
+  depending on hardware (thin LTO, multi-threaded) — and a few GB free.
 
 ## Install
 
@@ -86,8 +82,8 @@ cd surface-kernel-autoupdate
 5. optionally build both packages + install `linux-cachyos-surface` right
    away (it asks).
 
-You'll be prompted for `sudo` (repo dir, pacman.conf, db sync, install) and, on the
-first build, `makepkg` installs the `rust rust-bindgen rust-src` build deps.
+You'll be prompted for `sudo` (repo dir, pacman.conf, db sync, install); on the
+first build, `makepkg` installs the kernel build dependencies (rust, clang/LLVM, …).
 
 If you skipped the build during install, do it when ready:
 
@@ -122,16 +118,6 @@ breaks, it just won't have a newer version until that's done.
 > already-built newer Surface kernel, but won't *build* one. Use `yay`, or run
 > `surface-kernel-update` manually, to pick up brand-new releases.
 
-### Publishing (maintainer only)
-
-After a successful new build, the updater also runs `surface-kernel-publish`,
-which signs the packages, regenerates the signed `[surface-cachyos]` database,
-and uploads everything to the fixed `repo` release tag of this repository —
-that's where the precompiled repo above comes from. On machines without an
-authenticated `gh` or without the signing key in the gpg keyring it skips
-itself with a note; set `SURFACE_NO_PUBLISH=1` to skip it explicitly. It's
-idempotent and can also be run manually at any time.
-
 ### Not using fish?
 Skip `yay.fish` and add an alias/function to your shell rc, e.g. bash:
 
@@ -160,6 +146,9 @@ yay() { surface-kernel-update; command yay "$@"; }
   build never leaves you unbootable.
 - Old package files accumulate in `/var/lib/surface-local` on version bumps; prune
   occasionally if you care about the disk.
+- After a new build the updater tries to upload it to the precompiled
+  `[surface-cachyos]` repo — on machines without the signing key that step
+  skips itself with a note. Harmless; `SURFACE_NO_PUBLISH=1` silences it.
 
 ## Uninstall
 
@@ -177,7 +166,7 @@ prints the commands to remove those + the build caches if you want.
 |------|---------|
 | `install.sh` | automated setup (this is what you run) |
 | `surface-kernel-update` | the version-gated builder → local repo (both packages) |
-| `surface-kernel-publish` | maintainer-only: signs + uploads builds to the `[surface-cachyos]` GitHub release |
+| `surface-kernel-publish` | signs + uploads builds to the precompiled repo (skips itself without the signing key) |
 | `surface-cachyos.asc` | public signing key for the precompiled repo |
 | `yay.fish` | fish wrapper that runs the updater on `yay -Syu` |
 | `uninstall.sh` | undo the setup |
@@ -194,14 +183,11 @@ This repo is just the **installer/automation** — it bundles no kernel source.
 The actual kernel packaging lives in, and credit for the patches goes to:
 
 - [linux-surface/linux-surface](https://github.com/linux-surface/linux-surface)
-  — the Microsoft Surface kernel patches.
-  `linux-cachyos-surface`/`linux-cachyos-surface-latest` are forks of this
-  repo (full credits in their READMEs).
+  — the Microsoft Surface kernel patches (full credits in the two package
+  repos' READMEs).
 - [CachyOS/linux-cachyos](https://github.com/CachyOS/linux-cachyos) and
   [CachyOS/linux](https://github.com/CachyOS/linux) — the CachyOS kernel base
-  and packaging conventions those PKGBUILDs are adapted from.
+  and packaging conventions.
 - [dylandhall/linux-cachyos-surface](https://github.com/dylandhall/linux-cachyos-surface)
   and [jonpetersathan/linux-cachyos-surface](https://github.com/jonpetersathan/linux-cachyos-surface)
-  — the prior packaging project this setup originally tracked and drew its
-  PKGBUILD structure from, before moving to self-maintained forks of
-  linux-surface directly.
+  — the prior packaging this setup originally built on. Prior art and thanks.
