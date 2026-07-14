@@ -27,6 +27,38 @@ versions into it and `repo-add`s them; pacman/yay then install them like any
 repo package. A fish wrapper runs the updater automatically whenever you do a
 full upgrade.
 
+## Just want precompiled packages?
+
+You don't need this installer (or a local kernel build) at all: the packages
+built by this setup are also published as a **signed pacman repository**
+served from GitHub Releases. One-time setup — trust the signing key:
+
+```sh
+curl -s https://raw.githubusercontent.com/Steefzar/surface-kernel-autoupdate/main/surface-cachyos.asc \
+    | sudo pacman-key --add -
+sudo pacman-key --finger F43A86B2BAA715242965C241222C2A1B58F14BA7
+sudo pacman-key --lsign-key F43A86B2BAA715242965C241222C2A1B58F14BA7
+```
+
+Add the repository to `/etc/pacman.conf`:
+
+```ini
+[surface-cachyos]
+Server = https://github.com/Steefzar/surface-kernel-autoupdate/releases/download/repo
+```
+
+Then install (either or both):
+
+```sh
+sudo pacman -Syu linux-cachyos-surface-latest linux-cachyos-surface-latest-headers
+# or: sudo pacman -Syu linux-cachyos-surface linux-cachyos-surface-headers
+```
+
+Updates then arrive through plain `pacman -Syu` like any other repo package.
+The packages are x86_64, thin-LTO builds, published on the maintainer's
+build schedule — if you want builds the moment a version lands, or different
+build options, use the full setup below instead.
+
 ## Requirements
 
 - CachyOS (or another Arch derivative) on a Surface device.
@@ -90,6 +122,16 @@ breaks, it just won't have a newer version until that's done.
 > already-built newer Surface kernel, but won't *build* one. Use `yay`, or run
 > `surface-kernel-update` manually, to pick up brand-new releases.
 
+### Publishing (maintainer only)
+
+After a successful new build, the updater also runs `surface-kernel-publish`,
+which signs the packages, regenerates the signed `[surface-cachyos]` database,
+and uploads everything to the fixed `repo` release tag of this repository —
+that's where the precompiled repo above comes from. On machines without an
+authenticated `gh` or without the signing key in the gpg keyring it skips
+itself with a note; set `SURFACE_NO_PUBLISH=1` to skip it explicitly. It's
+idempotent and can also be run manually at any time.
+
 ### Not using fish?
 Skip `yay.fish` and add an alias/function to your shell rc, e.g. bash:
 
@@ -135,6 +177,8 @@ prints the commands to remove those + the build caches if you want.
 |------|---------|
 | `install.sh` | automated setup (this is what you run) |
 | `surface-kernel-update` | the version-gated builder → local repo (both packages) |
+| `surface-kernel-publish` | maintainer-only: signs + uploads builds to the `[surface-cachyos]` GitHub release |
+| `surface-cachyos.asc` | public signing key for the precompiled repo |
 | `yay.fish` | fish wrapper that runs the updater on `yay -Syu` |
 | `uninstall.sh` | undo the setup |
 | `README.md` | this file |

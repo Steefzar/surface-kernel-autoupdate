@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Publish the locally built Surface kernel packages as a *signed* pacman repo
+# served straight from GitHub Releases, so any machine can install them
+# precompiled (no local kernel build) with just:
+#
+#   [surface-cachyos]
+#   Server = https://github.com/Steefzar/surface-kernel-autoupdate/releases/download/repo
+#
+# after trusting the signing key (see the repo READMEs for the exact steps).
+#
+# What it does:
+#   1. detach-signs any package in the local repo that isn't signed yet
+#   2. builds a signed 'surface-cachyos' db over all local packages
+#   3. uploads packages + sigs + db to the fixed 'repo' release tag,
+#      pruning remote package assets that no longer exist locally
+#
+# Requires: gh (authenticated), gpg with the signing secret key.
+# Normally run automatically by surface-kernel-update after a new build;
+# safe to run manually/repeatedly (idempotent, --clobber semantics).
+set -euo pipefail
+
+REPODIR="${SURFACE_REPODIR:-/var/lib/surface-local}"
+GHREPO="${SURFACE_GHREPO:-Steefzar/surface-kernel-autoupdate}"
+TAG="repo"
+PUBDB="surface-cachyos"   # public repo name clients put in pacman.conf
+SIGN_KEY="${SURFACE_SIGN_KEY:-222C2A1B58F14BA7}"
+
+command -v gh >/dev/null || { echo ":: publish: gh not installed, skipping"; exit 1; }
+gh auth status >/dev/null 2>&1 || { echo ":: publish: gh not authenticated, skipping"; exit 1; }
+gpg --list-secret-keys "$SIGN_KEY" >/dev/null 2>&1 \
+    || { echo ":: publish: signing key $SIGN_KEY not in keyring, skipping"; exit 1; }
+
+shopt -s nullglob
+pkgs=("$REPODIR"/*.pkg.tar.zst)
+shopt -u nullglob
+((${#pkgs[@]})) || { echo ":: publish: no packages in $REPODIR, nothing to do"; exit 0; }
+
+# 1. sign packages that have no (or a stale) detached signature
+for p in "${pkgs[@]}"; do
+    if [[ ! -f $p.sig || $p -nt $p.sig ]]; then
+        echo ":: signing ${p##*/}"
+        gpg --batch --yes --detach-sign -u "$SIGN_KEY" -o "$p.sig" "$p"
+    fi
+done
+
+# 2. build the signed public db in a temp dir (separate from the unsigned
+#    local 'surface-local' db -- the public repo has its own name)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+ln -s "${pkgs[@]}" "$tmp"/
+( cd "$tmp" && repo-add -q --sign --key "$SIGN_KEY" "$PUBDB.db.tar.gz" ./*.pkg.tar.zst )
+# pacman fetches ${repo}.db/.files (+ .sig); GitHub asset name = filename, so
+# materialize them under those exact names (repo-add only made symlinks)
+for f in db files; do
+    cp -L --remove-destination "$tmp/$PUBDB.$f.tar.gz"     "$tmp/$PUBDB.$f"
+    cp -L --remove-destination "$tmp/$PUBDB.$f.tar.gz.sig" "$tmp/$PUBDB.$f.sig"
+done
+
+# 3. make sure the fixed release exists, then upload
+if ! gh release view "$TAG" --repo "$GHREPO" >/dev/null 2>&1; then
+    gh release create "$TAG" --repo "$GHREPO" --latest=false \
+        --title "pacman repo: [surface-cachyos]" \
+        --notes "Auto-published signed pacman repository. Do not edit assets by hand -- surface-kernel-publish overwrites them. See README for how to use."
+fi
+
+echo ":: uploading to https://github.com/$GHREPO/releases/tag/$TAG"
+gh release upload "$TAG" --repo "$GHREPO" --clobber \
+    "${pkgs[@]}" "${pkgs[@]/%/.sig}" \
+    "$tmp/$PUBDB.db" "$tmp/$PUBDB.db.sig" "$tmp/$PUBDB.files" "$tmp/$PUBDB.files.sig"
+
+# prune remote package assets that no longer exist locally (keeps the release
+# in sync with the local repo; db/files assets are never pruned)
+local_names=$(for p in "${pkgs[@]}"; do printf '%s\n%s.sig\n' "${p##*/}" "${p##*/}"; done)
+gh api "repos/$GHREPO/releases/tags/$TAG" --jq '.assets[].name' \
+| while read -r asset; do
+    [[ $asset == *.pkg.tar.zst || $asset == *.pkg.tar.zst.sig ]] || continue
+    grep -qxF "$asset" <<< "$local_names" && continue
+    echo ":: pruning stale remote asset $asset"
+    gh release delete-asset "$TAG" "$asset" --repo "$GHREPO" --yes
+done
+
+echo ":: publish done -- [surface-cachyos] is up to date"

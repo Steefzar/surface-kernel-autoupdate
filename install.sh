@@ -35,6 +35,12 @@ prod="$(cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null || true)"
 say "Installing updater -> $BIN/surface-kernel-update"
 install -Dm755 "$SRC_DIR/surface-kernel-update" "$BIN/surface-kernel-update"
 
+# maintainer-only publisher: pushes new builds to the public [surface-cachyos]
+# repo on GitHub Releases. Harmless on other machines — it skips itself unless
+# gh is authenticated AND the signing key is in the gpg keyring.
+say "Installing publisher -> $BIN/surface-kernel-publish"
+install -Dm755 "$SRC_DIR/surface-kernel-publish" "$BIN/surface-kernel-publish"
+
 say "Installing fish wrapper -> $FISHFUNC/yay.fish"
 install -Dm644 "$SRC_DIR/yay.fish" "$FISHFUNC/yay.fish"
 

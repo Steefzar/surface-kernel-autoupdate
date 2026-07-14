@@ -124,6 +124,13 @@ done
 if [[ $built_any -eq 1 ]]; then
     echo ":: New Surface kernel(s) added to local repo '$DBNAME'."
     echo ":: Your pacman/yay upgrade will now pick them up."
+    # push the new build to the public [surface-cachyos] repo on GitHub
+    # Releases too (signed, precompiled). Never fatal: the local repo is
+    # already updated either way. SURFACE_NO_PUBLISH=1 skips it.
+    if [[ -z ${SURFACE_NO_PUBLISH:-} ]] && command -v surface-kernel-publish >/dev/null; then
+        surface-kernel-publish \
+            || echo ":: NOTE: publish to GitHub Releases failed -- run surface-kernel-publish manually"
+    fi
 fi
 if ((${#rebase_needed[@]})); then
     echo ":: NOTE: needs a manual/Claude-assisted rebase: ${rebase_needed[*]}"

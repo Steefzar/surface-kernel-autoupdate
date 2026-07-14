@@ -11,7 +11,7 @@ BIN="$HOME/.local/bin"
 FISHFUNC="$HOME/.config/fish/functions"
 
 echo ":: Removing updater + fish wrapper"
-rm -f "$BIN/surface-kernel-update" "$FISHFUNC/yay.fish"
+rm -f "$BIN/surface-kernel-update" "$BIN/surface-kernel-publish" "$FISHFUNC/yay.fish"
 
 echo ":: Removing [$DBNAME] from /etc/pacman.conf (sudo)"
 # custom '#' address delimiters so the file:// path needs no escaping

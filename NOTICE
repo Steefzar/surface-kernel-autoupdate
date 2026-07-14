@@ -9,7 +9,10 @@ scripts. Commits are co-authored accordingly:
     Co-Authored-By: Claude <noreply@anthropic.com>
 
 This project only automates building/installing two kernel packages and
-bundles no kernel source of its own. The packages it builds, and where credit
+bundles no kernel source of its own. It additionally publishes the resulting
+binary packages as a signed pacman repository ([surface-cachyos]) via this
+repository's GitHub Releases; those binaries are unmodified builds of the
+packages credited below. The packages it builds, and where credit
 for the actual kernel patches belongs:
 
   - Steefzar/linux-cachyos-surface        — fork of linux-surface/linux-surface
