@@ -17,12 +17,6 @@ output, like an AUR `-git` package:
 
 They can be installed side by side, like `linux-cachyos`/`linux-cachyos-lts`.
 
-Neither repo is in the AUR, so plain `yay -Syu` can't track them. This sets up
-a tiny **local pacman repo** (`[surface-local]`): a small updater builds new
-versions into it and `repo-add`s them; pacman/yay then install them like any
-repo package. A fish wrapper runs the updater automatically whenever you do a
-full upgrade.
-
 ## Just want precompiled packages?
 
 You don't need this installer (or a local kernel build) at all: the packages
@@ -54,6 +48,11 @@ Updates then arrive through plain `pacman -Syu` like any other repo package.
 The packages are x86_64, thin-LTO builds, published on the maintainer's
 build schedule — if you want builds the moment a version lands, or different
 build options, use the full setup below instead.
+
+Neither package is in the AUR, so plain `yay` can't track them — instead
+`install.sh` sets up a tiny **local pacman repo** (`[surface-local]`) that the
+updater builds new versions into, and a fish wrapper that runs the updater on
+every full upgrade.
 
 ## Requirements
 
