@@ -1,5 +1,5 @@
 # local Claude Code settings
-.claude/settings.local.json
+.claude/
 
 # built installer artifact
 *.tar.gz
