@@ -37,14 +37,26 @@ Add the repository to `/etc/pacman.conf`:
 Server = https://github.com/Steefzar/surface-kernel-autoupdate/releases/download/repo
 ```
 
-Then install (either or both):
+Then install (any of them, side by side if you like):
 
 ```sh
 sudo pacman -Syu linux-cachyos-surface-latest linux-cachyos-surface-latest-headers
 # or: sudo pacman -Syu linux-cachyos-surface linux-cachyos-surface-headers
 ```
 
+Each also comes as a **BORE** build, the Burst-Oriented Response Enhancer
+scheduler from CachyOS's `linux-cachyos-bore`, which favours interactive tasks
+when the CPU is busy. The packages above use EEVDF, CachyOS's default:
+
+```sh
+sudo pacman -Syu linux-cachyos-bore-surface-latest linux-cachyos-bore-surface-latest-headers
+# or: sudo pacman -Syu linux-cachyos-bore-surface linux-cachyos-bore-surface-headers
+```
+
 Updates then arrive through plain `pacman -Syu` like any other repo package.
+What changed in each version is on the releases page of the package's repo:
+[linux-cachyos-surface-latest](https://github.com/Steefzar/linux-cachyos-surface-latest/releases)
+and [linux-cachyos-surface](https://github.com/Steefzar/linux-cachyos-surface/releases).
 The packages are x86_64, thin-LTO builds, published on the maintainer's
 build schedule — if you want builds the moment a version lands, or different
 build options, use the full setup below instead.
